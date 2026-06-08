@@ -36,8 +36,12 @@ extension RootSelectionSet {
       } else  {
         if let dictValue = value as? [String: Any] {
           result[key] = try convertToAnyHashableValueDict(dict: dictValue) as JSONValue
-        } else if let hashableValue = value as? AnyHashable {
-          result[key] = hashableValue as JSONValue
+        } else if let hashableValue = value as? any Hashable {
+          // `Sendable` is a marker protocol (no runtime witness), so `any Hashable`
+          // and `JSONValue` (`any Sendable & Hashable`) share an identical layout.
+          // The stdlib marks `AnyHashable: Sendable` unavailable, so the original
+          // `hashableValue as JSONValue` no longer compiles; erase via bitcast instead.
+          result[key] = unsafeBitCast(hashableValue, to: JSONValue.self)
         } else {
           throw RootSelectionSetInitializeError.hasNonHashableValue
         }
@@ -56,8 +60,10 @@ extension RootSelectionSet {
         result.append(try convertToAnyHashableArray(array: array) as JSONValue)
       } else if let dict = value as? [String: Any] {
         result.append(try convertToAnyHashableValueDict(dict: dict) as JSONValue)
-      } else if let hashable = value as? AnyHashable {
-        result.append(hashable as JSONValue)
+      } else if let hashable = value as? any Hashable {
+        // See note above: erase `any Hashable` to `JSONValue` (`any Sendable & Hashable`)
+        // via bitcast, since `AnyHashable: Sendable` is unavailable in the stdlib.
+        result.append(unsafeBitCast(hashable, to: JSONValue.self))
       } else {
         throw RootSelectionSetInitializeError.hasNonHashableValue
       }
